@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import * as THREE from "three";
 import text from "./text.jpeg";
+import { OrbitControls } from "three/examples/jsm/Addons.js";
 
 const ThreeJsScene = () => {
     useEffect(() => {
@@ -26,6 +27,8 @@ const ThreeJsScene = () => {
             })
         );
 
+        const controls = new OrbitControls(camera, renderer.domElement);
+
         scene.add(sphere);
 
         // Set up camera position
@@ -35,10 +38,12 @@ const ThreeJsScene = () => {
         const animate = () => {
             requestAnimationFrame(animate);
 
-            // Rotate the sphere
-            if (sphere) {
-                sphere.rotation.y += 0.01;
-            }
+            controls.update();
+
+            // // Rotate the sphere
+            // if (sphere) {
+            //     sphere.rotation.y += 0.01;
+            // }
 
             // Render the scene
             renderer.render(scene, camera);
