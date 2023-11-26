@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import * as THREE from "three";
 import text from "./text.jpeg";
 import { OrbitControls } from "three/examples/jsm/Addons.js";
+import { zoomByDelta } from "ol/interaction/Interaction";
 
 const ThreeJsScene = () => {
     useEffect(() => {
@@ -21,15 +22,27 @@ const ThreeJsScene = () => {
 
         // Create a sphere
         const sphere = new THREE.Mesh(
-            new THREE.SphereGeometry(1, 35, 35),
+            new THREE.SphereGeometry(1, 50, 50),
             new THREE.MeshBasicMaterial({
                 map: new THREE.TextureLoader().load(text),
             })
         );
 
+        const mesh = new THREE.Mesh(
+            new THREE.SphereGeometry(0.1, 50, 50),
+            new THREE.MeshBasicMaterial({ color: 0xff0000 })
+        );
         const controls = new OrbitControls(camera, renderer.domElement);
 
-        scene.add(sphere);
+        const lat = (18.2208 * Math.PI) / 180;
+        const lng = (66.5901 * Math.PI) / 180;
+
+        const x = Math.cos(lng) * Math.sin(lat);
+        const y = Math.sin(lng) * Math.sin(lat);
+        const z = Math.cos(lat);
+
+        mesh.position.set(x, y, z);
+        scene.add(sphere, mesh);
 
         // Set up camera position
         camera.position.z = 5;
