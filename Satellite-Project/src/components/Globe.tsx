@@ -1,6 +1,8 @@
 import { useEffect } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/Addons.js";
+// import { getLatLngObj } from "tle.js";
+import * as satellite from "satellite.js";
 
 import vertexShader from "../shaders/vertex.glsl";
 import fragmentShader from "../shaders/fragment.glsl";
@@ -67,22 +69,21 @@ const ThreeJsScene = () => {
         );
         atmosphere.scale.set(1.1, 1.1, 1.1);
         const mesh = new THREE.Mesh(
-            new THREE.SphereGeometry(0.01, 50, 50),
+            new THREE.SphereGeometry(0.05, 50, 50),
             new THREE.MeshBasicMaterial({ color: 0xff0000 })
         );
 
         const controls = new OrbitControls(camera, renderer.domElement);
         controls.enableDamping = true;
-        // an animation loop is required when either damping or auto-rotation are enabled
+        controls.enablePan = false;
 
-        const lat = (90 - 38.95863) * (Math.PI / 180);
-        const lng = (180 + -77.357002) * (Math.PI / 180);
+        // const la = (90 - lat) * (Math.PI / 180);
+        // const ln = (180 + lng) * (Math.PI / 180);
 
-        const x = -(1 * Math.sin(lat) * Math.cos(lng));
-        const z = 1 * Math.sin(lat) * Math.sin(lng);
-        const y = 1 * Math.cos(lat);
+        // const x = -(1 * Math.sin(la) * Math.cos(ln));
+        // const z = 1 * Math.sin(la) * Math.sin(ln);
+        // const y = 1 * Math.cos(la);
 
-        mesh.position.set(x, y, z);
         scene.add(sphere, mesh, atmosphere, stars);
 
         // Set up camera position
@@ -94,10 +95,44 @@ const ThreeJsScene = () => {
 
             controls.update();
 
-            // Rotate the sphere
-            // if (sphere) {
-            //     sphere.rotation.y += 0.01;
-            // }
+            const timestampMS = Date.now();
+            const tle = `STARLINK-1007           
+            1 44713U 19074A   23331.27628295 -.00004873  00000+0 -30862-3 0  9998
+            2 44713  53.0546 327.9532 0001366 112.3783 247.7351 15.06379335223138`;
+
+            const tleLines = tle.split("\n").map((line) => line.trim());
+            const satrec = satellite.twoline2satrec(tleLines[1], tleLines[2]);
+
+            const date = new Date(timestampMS);
+
+            const positionAndVelocity = satellite.propagate(
+                satrec,
+                date
+            ).position;
+            if (typeof positionAndVelocity === "boolean") {
+                // Handle error, if any
+                return;
+            }
+
+            const gmst = satellite.gstime(date);
+            const geodeticPosition = satellite.eciToGeodetic(
+                positionAndVelocity,
+                gmst
+            );
+
+            const latitude = satellite.degreesLat(geodeticPosition.latitude);
+            const longitude = satellite.degreesLong(geodeticPosition.longitude);
+
+            // console.log("Latitude:", latitude);
+            // console.log("Longitude:", longitude);
+
+            const la = (90 - latitude) * (Math.PI / 180);
+            const ln = (180 + longitude) * (Math.PI / 180);
+
+            const x = -(1 * Math.sin(la) * Math.cos(ln));
+            const z = 1 * Math.sin(la) * Math.sin(ln);
+            const y = 1 * Math.cos(la);
+            mesh.position.set(x, y, z);
 
             // Render the scene
             renderer.render(scene, camera);

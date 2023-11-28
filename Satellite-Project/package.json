@@ -17,7 +17,8 @@
     "react-leaflet": "^4.2.1",
     "satellite.js": "^5.0.0",
     "three": "^0.158.0",
-    "three.js": "^0.77.0"
+    "three.js": "^0.77.0",
+    "tle.js": "^4.9.0"
   },
   "devDependencies": {
     "@types/react": "^18.2.15",
