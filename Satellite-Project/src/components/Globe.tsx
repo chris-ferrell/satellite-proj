@@ -3,6 +3,7 @@ import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/Addons.js";
 // import { getLatLngObj } from "tle.js";
 import * as satellite from "satellite.js";
+import tleDatas from "./data";
 
 import vertexShader from "../shaders/vertex.glsl";
 import fragmentShader from "../shaders/fragment.glsl";
@@ -96,11 +97,8 @@ const ThreeJsScene = () => {
             controls.update();
 
             const timestampMS = Date.now();
-            const tle = `STARLINK-1007           
-            1 44713U 19074A   23331.27628295 -.00004873  00000+0 -30862-3 0  9998
-            2 44713  53.0546 327.9532 0001366 112.3783 247.7351 15.06379335223138`;
 
-            const tleLines = tle.split("\n").map((line) => line.trim());
+            const tleLines = tle1.split("\n").map((line) => line.trim());
             const satrec = satellite.twoline2satrec(tleLines[1], tleLines[2]);
 
             const date = new Date(timestampMS);
@@ -131,7 +129,7 @@ const ThreeJsScene = () => {
 
             const x = -(1 * Math.sin(la) * Math.cos(ln));
             const z = 1 * Math.sin(la) * Math.sin(ln);
-            const y = 1 * Math.cos(la);
+            const y = 1 * Math.cos(la) + 0.2;
             mesh.position.set(x, y, z);
 
             // Render the scene
