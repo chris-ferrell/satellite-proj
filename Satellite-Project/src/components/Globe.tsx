@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/Addons.js";
-// import { getLatLngObj } from "tle.js";
+import tleDatas from "./data";
 import * as satellite from "satellite.js";
 
 import vertexShader from "../shaders/vertex.glsl";
@@ -12,7 +12,6 @@ import atmosphereFragmentShader from "../shaders/atmosphereFragment.glsl";
 
 const ThreeJsScene = () => {
     useEffect(() => {
-        // Set up scene, camera, and renderer
         const scene = new THREE.Scene();
         const camera = new THREE.PerspectiveCamera(
             75,
@@ -26,7 +25,6 @@ const ThreeJsScene = () => {
         renderer.setPixelRatio(window.devicePixelRatio);
         document.body.appendChild(renderer.domElement);
 
-        // Create a sphere
         const sphere = new THREE.Mesh(
             new THREE.SphereGeometry(1, 50, 50),
             new THREE.ShaderMaterial({
@@ -51,13 +49,13 @@ const ThreeJsScene = () => {
         for (let i = 0; i < 10000; i++) {
             const x = (Math.random() - 0.5) * 2300;
             const y = (Math.random() - 0.5) * 2300;
-            // const z = -Math.random() * 3000;
             starVertices.push(x, y);
         }
         starGeometry.setAttribute(
             "position",
             new THREE.Float32BufferAttribute(starVertices, 3)
         );
+
         const atmosphere = new THREE.Mesh(
             new THREE.SphereGeometry(1, 50, 50),
             new THREE.ShaderMaterial({
@@ -68,14 +66,58 @@ const ThreeJsScene = () => {
             })
         );
         atmosphere.scale.set(1.1, 1.1, 1.1);
-        const mesh = new THREE.Mesh(
-            new THREE.SphereGeometry(0.05, 50, 50),
-            new THREE.MeshBasicMaterial({ color: 0xff0000 })
-        );
 
         const controls = new OrbitControls(camera, renderer.domElement);
         controls.enableDamping = true;
         controls.enablePan = false;
+
+        interface Satellite {
+            name: string;
+            line1: string;
+            line2: string;
+            mesh: THREE.Mesh;
+        }
+
+        const tleDataStrings = tleDatas.join("\n").split("\n\n");
+
+        const satellites: Satellite[] = tleDataStrings.reduce(
+            (acc: Satellite[], tleDataString) => {
+                const tleLines = tleDataString
+                    .split("\n")
+                    .map((line) => line.trim());
+
+                tleLines.forEach((line, index) => {
+                    if (index % 3 === 0) {
+                        // Each satellite has three lines, so create a new object every three lines
+                        let name = "";
+                        let line1 = "";
+                        let line2 = "";
+
+                        // Use a regular expression to capture the name
+                        const nameMatch = line.match(/^(\S.*)/);
+                        if (nameMatch) {
+                            name = nameMatch[1].trim();
+                        }
+                        const satelliteMesh = new THREE.Mesh(
+                            new THREE.SphereGeometry(0.01, 50, 50),
+                            new THREE.MeshBasicMaterial({ color: 0xff0000 })
+                        );
+                        // Otherwise, assume it's part of the TLE data and assign it to 'line1' or 'line2'
+                        [line1, line2] = tleLines
+                            .slice(index + 1, index + 3)
+                            .map((l) => l.trim());
+
+                        acc.push({ name, line1, line2, mesh: satelliteMesh });
+                        scene.add(satelliteMesh);
+                    }
+                });
+
+                return acc;
+            },
+            []
+        );
+
+        scene.add(sphere, stars);
 
         // const la = (90 - lat) * (Math.PI / 180);
         // const ln = (180 + lng) * (Math.PI / 180);
@@ -84,7 +126,7 @@ const ThreeJsScene = () => {
         // const z = 1 * Math.sin(la) * Math.sin(ln);
         // const y = 1 * Math.cos(la);
 
-        scene.add(sphere, mesh, atmosphere, stars);
+        // scene.add(sphere, mesh, atmosphere, stars);
 
         // Set up camera position
         camera.position.z = 5;
@@ -95,44 +137,46 @@ const ThreeJsScene = () => {
 
             controls.update();
 
-            const timestampMS = Date.now();
-            const tle = `STARLINK-1007           
-            1 44713U 19074A   23331.27628295 -.00004873  00000+0 -30862-3 0  9998
-            2 44713  53.0546 327.9532 0001366 112.3783 247.7351 15.06379335223138`;
+            satellites.forEach(({ line1, line2, mesh }) => {
+                const timestampMS = Date.now();
 
-            const tleLines = tle.split("\n").map((line) => line.trim());
-            const satrec = satellite.twoline2satrec(tleLines[1], tleLines[2]);
+                const satrec = satellite.twoline2satrec(line1, line2);
 
-            const date = new Date(timestampMS);
+                const date = new Date(timestampMS);
 
-            const positionAndVelocity = satellite.propagate(
-                satrec,
-                date
-            ).position;
-            if (typeof positionAndVelocity === "boolean") {
-                // Handle error, if any
-                return;
-            }
+                const positionAndVelocity = satellite.propagate(
+                    satrec,
+                    date
+                ).position;
+                if (typeof positionAndVelocity === "boolean") {
+                    // Handle error, if any
+                    return;
+                }
 
-            const gmst = satellite.gstime(date);
-            const geodeticPosition = satellite.eciToGeodetic(
-                positionAndVelocity,
-                gmst
-            );
+                const gmst = satellite.gstime(date);
+                const geodeticPosition = satellite.eciToGeodetic(
+                    positionAndVelocity,
+                    gmst
+                );
 
-            const latitude = satellite.degreesLat(geodeticPosition.latitude);
-            const longitude = satellite.degreesLong(geodeticPosition.longitude);
+                const latitude = satellite.degreesLat(
+                    geodeticPosition.latitude
+                );
+                const longitude = satellite.degreesLong(
+                    geodeticPosition.longitude
+                );
 
-            // console.log("Latitude:", latitude);
-            // console.log("Longitude:", longitude);
+                // console.log("Latitude:", latitude);
+                // console.log("Longitude:", longitude);
 
-            const la = (90 - latitude) * (Math.PI / 180);
-            const ln = (180 + longitude) * (Math.PI / 180);
+                const la = (90 - latitude) * (Math.PI / 180);
+                const ln = (180 + longitude) * (Math.PI / 180);
 
-            const x = -(1 * Math.sin(la) * Math.cos(ln));
-            const z = 1 * Math.sin(la) * Math.sin(ln);
-            const y = 1 * Math.cos(la);
-            mesh.position.set(x, y, z);
+                const x = -(1.3 * Math.sin(la) * Math.cos(ln));
+                const z = 1.3 * Math.sin(la) * Math.sin(ln);
+                const y = 1.3 * Math.cos(la);
+                mesh.position.set(x, y, z);
+            });
 
             // Render the scene
             renderer.render(scene, camera);
