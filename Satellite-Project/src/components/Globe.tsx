@@ -29,8 +29,13 @@ const ThreeJsScene = () => {
         renderer.setPixelRatio(window.devicePixelRatio);
         document.body.appendChild(renderer.domElement);
 
-        // Create a sphere with a custom shader material
-        const sphere = new THREE.Mesh(
+        // Create a star field
+        const starGeometry = new THREE.BufferGeometry();
+        const starMaterial = new THREE.PointsMaterial({
+            color: 0xffffff,
+        });
+        const stars = new THREE.Points(starGeometry, starMaterial);
+        const earth = new THREE.Mesh(
             new THREE.SphereGeometry(1, 50, 50),
             new THREE.ShaderMaterial({
                 vertexShader,
@@ -42,13 +47,6 @@ const ThreeJsScene = () => {
                 },
             })
         );
-
-        // Create a star field
-        const starGeometry = new THREE.BufferGeometry();
-        const starMaterial = new THREE.PointsMaterial({
-            color: 0xffffff,
-        });
-        const stars = new THREE.Points(starGeometry, starMaterial);
 
         // Generate random star positions
         const starVertices = [];
@@ -80,71 +78,29 @@ const ThreeJsScene = () => {
         controls.enablePan = false;
 
         // Define interface for satellite data
-        interface Satellite {
+        // Create a class for Satellite
+        class SatelliteObject {
             name: string;
             line1: string;
             line2: string;
-            mesh: THREE.Mesh;
-        }
+            mesh: THREE.InstancedMesh;
 
-        // Split TLE data, create Three.js mesh for each satellite, and add them to the scene
-        const tleDataStrings = tleDatas.join("\n").split("\n\n");
-        const satellites: Satellite[] = tleDataStrings.reduce(
-            (acc: Satellite[], tleDataString) => {
-                const tleLines = tleDataString
-                    .split("\n")
-                    .map((line) => line.trim());
+            constructor(name: string, line1: string, line2: string) {
+                this.name = name;
+                this.line1 = line1;
+                this.line2 = line2;
 
-                tleLines.forEach((line, index) => {
-                    if (index % 3 === 0) {
-                        let name = "";
-                        let line1 = "";
-                        let line2 = "";
-
-                        // Extract satellite name using a regular expression
-                        const nameMatch = line.match(/^(\S.*)/);
-                        if (nameMatch) {
-                            name = nameMatch[1].trim();
-                        }
-
-                        // Create a new Three.js mesh for the satellite
-                        const satelliteMesh = new THREE.Mesh(
-                            new THREE.SphereGeometry(0.01, 50, 50),
-                            new THREE.MeshBasicMaterial({ color: 0xff0000 })
-                        );
-
-                        // Extract TLE data and add the satellite to the scene
-                        [line1, line2] = tleLines
-                            .slice(index + 1, index + 3)
-                            .map((l) => l.trim());
-
-                        acc.push({ name, line1, line2, mesh: satelliteMesh });
-                        scene.add(satelliteMesh);
-                    }
+                // Create a new Three.js instanced mesh for the satellite
+                const geometry = new THREE.SphereGeometry(0.01, 50, 50);
+                const material = new THREE.MeshBasicMaterial({
+                    color: 0xff0000,
                 });
+                this.mesh = new THREE.InstancedMesh(geometry, material, 1);
+            }
 
-                return acc;
-            },
-            []
-        );
-
-        // Add elements to the scene
-        scene.add(sphere, stars);
-
-        // Set up camera position
-        camera.position.z = 5;
-
-        // Animation function
-        const animate = () => {
-            requestAnimationFrame(animate);
-
-            // Update controls
-            controls.update();
-
-            // Update satellite positions based on TLE data
-            satellites.forEach(({ line1, line2, mesh }) => {
+            updatePosition() {
                 const timestampMS = Date.now();
-                const satrec = satellite.twoline2satrec(line1, line2);
+                const satrec = satellite.twoline2satrec(this.line1, this.line2);
                 const date = new Date(timestampMS);
 
                 const positionAndVelocity = satellite.propagate(
@@ -175,7 +131,77 @@ const ThreeJsScene = () => {
                 const x = -(1.3 * Math.sin(la) * Math.cos(ln));
                 const z = 1.3 * Math.sin(la) * Math.sin(ln);
                 const y = 1.3 * Math.cos(la);
-                mesh.position.set(x, y, z);
+
+                // Set the position for the instanced mesh
+                const matrix = new THREE.Matrix4();
+                matrix.setPosition(new THREE.Vector3(x, y, z));
+                this.mesh.setMatrixAt(0, matrix);
+                this.mesh.instanceMatrix.needsUpdate = true;
+            }
+        }
+
+        // Split TLE data and create Satellite objects
+        const tleDataStrings = tleDatas.join("\n").split("\n");
+
+        const satellites: SatelliteObject[] = [];
+
+        let currentSatellite: SatelliteObject | null = null;
+
+        tleDataStrings.forEach((line) => {
+            const trimmedLine = line.trim();
+
+            // Skip empty lines
+            if (!trimmedLine) {
+                return;
+            }
+
+            // If it starts with a non-numeric character, consider it as a new satellite name
+            if (isNaN(parseInt(trimmedLine[0], 10))) {
+                if (currentSatellite) {
+                    satellites.push(currentSatellite);
+                }
+
+                currentSatellite = new SatelliteObject(trimmedLine, "", "");
+            } else if (currentSatellite) {
+                // Append line to current satellite's data
+                if (currentSatellite.line1 === "") {
+                    currentSatellite.line1 = trimmedLine;
+                } else {
+                    currentSatellite.line2 = trimmedLine;
+                }
+            }
+        });
+
+        // Add the last satellite to the array
+        if (currentSatellite) {
+            satellites.push(currentSatellite);
+        }
+
+        // Add satellites to the scene
+        satellites.forEach((satellite) => {
+            scene.add(satellite.mesh);
+        });
+
+        console.log("Satellites:", satellites);
+
+        // ... (existing code)
+
+        // Add elements to the scene
+        scene.add(earth, stars, atmosphere);
+
+        // Set up camera position
+        camera.position.z = 5;
+
+        // Animation function
+        const animate = () => {
+            requestAnimationFrame(animate);
+
+            // Update controls
+            controls.update();
+
+            // Update satellite positions based on TLE data
+            satellites.forEach((satellite) => {
+                satellite.updatePosition();
             });
 
             // Render the scene
